@@ -41,6 +41,33 @@ The easiest way to manage Kimo Labs is via the unified `kimo.sh` script.
     ./kimo.sh logs
     ```
 
+### Manual Service Initialization (One-by-One)
+
+For granular control, you can start each service individually in separate terminals:
+
+1.  **Start Vector Database (Docker)**
+    ```bash
+    docker-compose up -d chroma-server chroma-admin
+    ```
+
+2.  **Start Backend (FastAPI)**
+    ```bash
+    source .venv/bin/activate
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/apps
+    export CHROMA_HOST=localhost
+    export CHROMA_PORT=8002
+    python -m uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8001 --reload
+    ```
+    *Access API: http://10.10.20.144:8001/docs*
+
+3.  **Start Frontend (Next.js)**
+    ```bash
+    cd apps/frontend
+    # Note: Ensure Node memory limit is 8GB
+    npm run dev
+    ```
+    *Access UI: http://10.10.20.144:3001*
+
 ---
 
 ## 🛠 Tech Stack

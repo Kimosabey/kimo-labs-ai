@@ -53,10 +53,37 @@ kimo-labs/
 
 | Service | Protocol | Port | Description |
 | :--- | :--- | :--- | :--- |
-| **Frontend** | Next.js | `3001` | [Monolith Console](http://localhost:3001) |
-| **Backend** | FastAPI | `8001` | [Intelligence API](http://localhost:8001/docs) |
+| **Frontend** | Next.js | `3001` | [Monolith Console](http://10.10.20.144:3001) |
+| **Backend** | FastAPI | `8001` | [Intelligence API](http://10.10.20.144:8001/docs) |
 | **ChromaDB** | Vector Lake | `8002` | High-dimensional Storage |
-| **Chroma GUI** | Admin | `8003` | Vector Diagnostics |
+| **Chroma GUI** | Admin | `8003` | [Vector Diagnostics](http://10.10.20.144:8003) |
+
+### 🚀 Comprehensive Ignition Commands
+
+**1. Launch the Neural Memory & Diagnostic Lake (Docker)**  
+Start the backend persistence and its administrative GUI in the background:
+```bash
+docker-compose up -d chroma-server chroma-admin
+```
+*Note for GUI Setup: When navigating to `http://10.10.20.144:8003`, ensure the **Chroma Connection String** is set to `http://10.10.20.144:8002` (the actual DB port), leaving tenant and database as default.*
+
+**2. Ignite the Core Intelligence Hub (FastAPI)**  
+Activate the Python environment, set routing variables, and launch the asynchronous inference engine:
+```bash
+source .venv/bin/activate
+export PYTHONPATH=$PYTHONPATH:$(pwd)/apps
+export CHROMA_HOST=localhost
+export CHROMA_PORT=8002
+python -m uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8001 --reload
+```
+*Optional: You can also use the wrapper script `./kimo.sh dev` for automated booting.*
+
+**3. Boot the Monolith Console (Next.js/Turbopack)**  
+In a completely fresh terminal window, execute the UI client with the upgraded 8GB V8 Heap size:
+```bash
+cd apps/frontend
+npm run dev
+```
 
 ## 🔒 Modern Engineering Standards
 *   **Hybrid Inference**: Real-time cloud speed (Deepgram) + Local privacy (Whisper/Ollama).
