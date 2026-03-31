@@ -4,6 +4,7 @@ import logging
 import subprocess
 import tempfile
 import uuid
+import urllib.request
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,10 +16,28 @@ class TTSRunner:
         Initialize the TTS Runner.
         Defaults to checking a local 'data/models/piper' directory.
         """
-        self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/models/piper"))
+        self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../data/models/piper"))
         self.model_path = model_path or os.path.join(self.base_dir, "en_US-lessac-medium.onnx")
         self.config_path = config_path or (self.model_path + ".json")
         self._lock = asyncio.Lock()
+
+    def _ensure_model_exists(self):
+        """
+        Download the model and config if they don't exist.
+        """
+        os.makedirs(self.base_dir, exist_ok=True)
+        
+        base_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium"
+        
+        if not os.path.exists(self.model_path):
+            logger.info(f"Downloading Piper model to {self.model_path}...")
+            urllib.request.urlretrieve(f"{base_url}/en_US-lessac-medium.onnx?download=true", self.model_path)
+            logger.info("Piper model downloaded successfully.")
+            
+        if not os.path.exists(self.config_path):
+            logger.info(f"Downloading Piper config to {self.config_path}...")
+            urllib.request.urlretrieve(f"{base_url}/en_US-lessac-medium.onnx.json?download=true", self.config_path)
+            logger.info("Piper config downloaded successfully.")
 
     async def generate_speech(self, text: str, output_path: str = None):
         """
@@ -29,10 +48,8 @@ class TTSRunner:
             temp_dir = tempfile.gettempdir()
             output_path = os.path.join(temp_dir, f"tts_{uuid.uuid4()}.wav")
 
-        if not os.path.exists(self.model_path):
-            logger.error(f"Piper model not found at {self.model_path}")
-            # In a real scenario, we might want to auto-download or throw a specific error
-            raise FileNotFoundError(f"Piper model not found. Please place it in {self.model_path}")
+        # Ensure model is downloaded before trying to run it
+        await asyncio.to_thread(self._ensure_model_exists)
 
         async with self._lock:
             try:

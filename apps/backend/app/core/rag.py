@@ -17,10 +17,9 @@ ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 Settings.llm = Ollama(model="llama3", base_url=ollama_url, request_timeout=120.0)
 
 def build_or_load_index():
-    # Define persist directory (ensure it's absolute or correctly relative)
-    # When running in container, these will be mapped to volumes
-    db_path = os.path.abspath("./db")
-    docs_path = os.path.abspath("./docs")
+    # Define persist directory (ensure it's absolute mapped to project root data)
+    db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/db"))
+    docs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/docs"))
     
     # Initialize ChromaDB client based on environment
     chroma_host = os.getenv("CHROMA_HOST")
@@ -63,6 +62,7 @@ def build_or_load_index():
 
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.memory import ChatMemoryBuffer
 
 def ingest_documents(index, file_path):
     """Ingest a new file into the existing index."""
@@ -90,7 +90,7 @@ def get_llm(model_name="llama3"):
     else:
         return Ollama(model=model_name, base_url=ollama_url)
 
-def get_agent(index, model_name="llama3"):
+def get_agent(index, model_name="llama3", chat_history=None):
     # Dynamically select the LLM node
     llm = get_llm(model_name)
     
@@ -103,10 +103,22 @@ def get_agent(index, model_name="llama3"):
         )
     )
     
+    # Instantiate memory tracker for ReAct Agent
+    memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history or [], llm=llm)
+    
+    # High-performance context prompt to prevent the Agent from falling into latency tool-loops on casual chat
+    system_prompt = (
+        "You are Kimo Labs AI, an advanced intelligence node. "
+        "If the user types a greeting (like 'hello', 'good evening', 'hi') or asks casual questions, "
+        "respond directly WITHOUT using any tools. Only use the 'vector_lake' tool if the user asks for specific technical documentation or intelligence."
+    )
+    
     # Initialize the high-performance ReActAgent Workflow
     agent = ReActAgent(
         tools=[query_tool],
         llm=llm,
+        memory=memory,
+        context=system_prompt,
         verbose=True
     )
     return agent

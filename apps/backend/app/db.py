@@ -4,8 +4,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 import datetime
 
-# Define the database path (persisted in data/db)
-DB_DIR = os.path.abspath("./db")
+# Define the database path (persisted in project root data/db)
+DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/db"))
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
 
@@ -26,11 +26,11 @@ class MessageModel(Base):
     __tablename__ = "messages"
     
     id = Column(String, primary_key=True)
-    session_id = Column(String, ForeignKey("sessions.id"))
+    session_id = Column(String, ForeignKey("sessions.id"), index=True)
     role = Column(String) # "user" or "assistant"
     content = Column(Text)
     sources = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     
     session = relationship("SessionModel", back_populates="messages")
 

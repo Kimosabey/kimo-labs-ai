@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 import httpx
 from pydantic import BaseModel
 from typing import List, Optional
-from backend.app.core.rag import build_or_load_index, get_agent, ingest_documents
+from backend.app.core.rag import build_or_load_index, get_agent, ingest_documents, get_llm
 from backend.app.core.asr import asr_runner
 from backend.app.core.tts import tts_runner
 from backend.app.db import AsyncSessionLocal as SessionLocal, init_db, SessionModel, MessageModel
@@ -18,6 +18,7 @@ from sqlalchemy import select
 import chromadb
 
 from fastapi.middleware.cors import CORSMiddleware
+from llama_index.core.llms import ChatMessage
 
 app = FastAPI(title="Kimo Labs", description="Next-gen local AI hub for RAG and tool-use.")
 
@@ -151,32 +152,48 @@ async def handle_query(request: QueryRequest):
         db_session.add(user_msg)
         await db_session.commit()
 
-    # Initialize the high-performance agent workflow
-    agent = get_agent(index, model_name=request.model)
+        # Fetch past messages to inject into Memory (excluding the current user_msg we just saved)
+        past_msgs = await db_session.execute(
+            select(MessageModel)
+            .where(MessageModel.session_id == active_session_id)
+            .where(MessageModel.id != user_msg.id)
+            .order_by(MessageModel.timestamp.asc())
+        )
+        chat_history = [
+            ChatMessage(role=m.role, content=m.content) 
+            for m in past_msgs.scalars().all() if m.role in ("user", "assistant")
+        ]
+
+    # Initialize the high-performance agent workflow with injected Chat Memory
+    agent = get_agent(index, model_name=request.model, chat_history=chat_history)
+
+    # Determine if query requires full Agentic Tool capabilities
+    query_text = request.query.lower().strip()
+    is_complex = any(keyword in query_text for keyword in ["summarize", "check", "document", "file", "diagnostic", "status", "query", "search", "lake", "vector", "find"])
 
     async def event_generator():
         try:
             full_answer = ""
-            # The new ReActAgent workflow uses .run()
-            # In v0.14+, this returns a handler that we iterate asychronously
-            handler = agent.run(input=request.query)
             
-            async for event in handler:
-                # We check for generic token/text events if available, 
-                # or handle logic based on events.
-                # For this implementation, we look for AgentChatEvent or simple token yields.
-                # Since workflows are generic, we can also check the result at the end.
+            # Fast-Path Router Bypass: Skips Tool loops entirely for instant conversational TTFT
+            if not is_complex and len(query_text.split()) < 10:
+                llm = get_llm(request.model)
+                system_msg = ChatMessage(role="system", content="You are Kimo Labs AI. Provide concise, friendly, and natural conversational replies.")
+                messages = [system_msg] + chat_history + [ChatMessage(role="user", content=request.query)]
+                response = await llm.astream_chat(messages)
+                async for chunk in response:
+                    if chunk.delta:
+                        full_answer += chunk.delta
+                        yield f"data: {json.dumps({'type': 'answer', 'content': chunk.delta, 'session_id': active_session_id})}\n\n"
+            else:
+                # Agentic ReAct Pipeline
+                handler = agent.run(user_msg=request.query)
                 
-                # Check for token events (if implemented in the specific workflow)
-                if hasattr(event, "token"):
-                    chunk = str(event.token)
-                    full_answer += chunk
-                    yield f"data: {json.dumps({'type': 'answer', 'content': chunk, 'session_id': active_session_id})}\n\n"
-            
-            # Get the final result from the workflow
-            final_result = await handler
-            if not full_answer:
+                # Await final clean result to prevent streaming internal "Thought:" chains which break the TTS engine logic
+                final_result = await handler
                 full_answer = str(final_result)
+                
+                # Flush the clean response out to the UI immediately
                 yield f"data: {json.dumps({'type': 'answer', 'content': full_answer, 'session_id': active_session_id})}\n\n"
 
             # Finalize and persist assistant message
