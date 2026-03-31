@@ -22,10 +22,21 @@ services:
     image: chromadb/chroma:latest
     container_name: kimo-labs-chroma
     ports:
-      - "8001:8000"
+      - "8002:8000"
     volumes:
       - ./data/chroma:/chroma/chroma
     environment:
       - PERSIST_DIRECTORY=/chroma/chroma
       - IS_PERSISTENT=TRUE
+    restart: unless-stopped
+
+  frontend:
+    build: ./apps/frontend
+    container_name: kimo-labs-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    depends_on:
+      - backend
     restart: unless-stopped

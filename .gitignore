@@ -16,6 +16,8 @@ npm-debug.log*
 data/db/
 data/docs/
 hf_cache/
+db/
+docs/
 
 # OS
 .DS_Store
