@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  allowedDevOrigins: ["10.10.20.144"],
   async headers() {
     return [
       {
@@ -11,6 +12,9 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+  experimental: {
+    memoryBasedWorkersCount: true,
   },
 };
 

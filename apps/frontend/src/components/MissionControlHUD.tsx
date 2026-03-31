@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Float, MeshDistortMaterial, Sphere, MeshWobbleMaterial, Points, PointMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+
+// Suppress upstream THREE.Clock deprecation warning to keep terminal and Error Overlay clean
+if (typeof console !== 'undefined') {
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('THREE.Clock')) return;
+    originalWarn(...args);
+  };
+}
 
 function NeuralSphere() {
   const meshRef = useRef<THREE.Mesh>(null);

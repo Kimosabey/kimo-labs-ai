@@ -19,6 +19,12 @@ interface Message {
   isSpeaking?: boolean;
 }
 
+interface Session {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
 const SAMPLE_QUESTIONS = [
   "Execute system diagnostic on Kimo v2",
   "Summarize active research documents",
@@ -33,6 +39,7 @@ export default function ChatWorkbench() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -44,6 +51,44 @@ export default function ChatWorkbench() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/sessions`);
+      const data = await res.json();
+      setSessions(data);
+    } catch (err) {
+      console.error("Failed to fetch sessions", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, [API_URL]);
+
+  const loadSession = async (sessionId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${API_URL}/sessions/${sessionId}/messages`);
+      const msgs = await res.json();
+      setMessages(msgs.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content
+      })));
+      setActiveSessionId(sessionId);
+    } catch (err) {
+      console.error("Failed to load session", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const purgeContext = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setInput("");
+  };
 
   // -- ASR Logic --
   const startRecording = async () => {
@@ -156,7 +201,10 @@ export default function ChatWorkbench() {
                 if (data.type === "answer") {
                   fullContent += data.content;
                   setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: fullContent } : m));
-                  if (data.session_id && !activeSessionId) setActiveSessionId(data.session_id);
+                  if (data.session_id && !activeSessionId) {
+                    setActiveSessionId(data.session_id);
+                    fetchSessions();
+                  }
                 }
               } catch (e) {}
             }
@@ -199,10 +247,33 @@ export default function ChatWorkbench() {
 
         <Separator className="bg-white/5" />
 
-        <div className="flex-1">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-6 italic">History Buffer</p>
-          <div className="flex items-center justify-center h-32 border border-dashed border-white/10 rounded-3xl opacity-40">
-            <span className="text-[10px] font-bold uppercase tracking-widest">Buffer Empty</span>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-6 italic shrink-0">History Buffer</p>
+          <div className="flex-1 overflow-y-auto scrollbar-hide space-y-2">
+            {sessions.length === 0 ? (
+              <div className="flex items-center justify-center h-32 border border-dashed border-white/10 rounded-3xl opacity-40">
+                <span className="text-[10px] font-bold uppercase tracking-widest">Buffer Empty</span>
+              </div>
+            ) : (
+              sessions.map(s => (
+                <button 
+                  key={s.id}
+                  onClick={() => loadSession(s.id)}
+                  className={cn(
+                    "w-full text-left p-4 rounded-2xl transition-all duration-300 group",
+                    activeSessionId === s.id ? "bg-primary/20 border border-primary/30 text-primary" : "bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.04]"
+                  )}
+                >
+                  <p className={cn(
+                    "text-xs font-black truncate uppercase tracking-tight italic",
+                    activeSessionId === s.id ? "text-primary text-glow" : "text-white/70 group-hover:text-white"
+                  )}>{s.title}</p>
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                    {new Date(s.created_at).toLocaleDateString()}
+                  </p>
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -381,7 +452,7 @@ export default function ChatWorkbench() {
                   {isTtsEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                   <span>Auto-Synthesis: {isTtsEnabled ? "ACTIVE" : "STANDBY"}</span>
                 </button>
-                <button className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-40 hover:opacity-100 hover:text-primary transition-all duration-500 italic">
+                <button onClick={purgeContext} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-40 hover:opacity-100 hover:text-primary transition-all duration-500 italic">
                   <RotateCcw size={14} /> 
                   <span>Purge Context</span>
                 </button>
