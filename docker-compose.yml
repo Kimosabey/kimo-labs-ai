@@ -1,0 +1,31 @@
+services:
+  backend:
+    build: ./apps/backend
+    container_name: kimo-labs-backend
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - CHROMA_HOST=chroma-server
+      - CHROMA_PORT=8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data/docs:/app/docs
+      - ./data/db:/app/db
+      - ./hf_cache:/root/.cache/huggingface
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - chroma-server
+    restart: unless-stopped
+
+  chroma-server:
+    image: chromadb/chroma:latest
+    container_name: kimo-labs-chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    environment:
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - IS_PERSISTENT=TRUE
+    restart: unless-stopped

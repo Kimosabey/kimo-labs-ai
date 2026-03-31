@@ -1,0 +1,15 @@
+llama-index-core
+llama-index-embeddings-huggingface
+llama-index-vector-stores-chroma
+llama-index-llms-ollama
+pypdf
+chromadb
+sentence-transformers
+fastapi
+uvicorn
+httpx
+sqlalchemy
+aiosqlite
+faster-whisper
+python-multipart
+piper-tts

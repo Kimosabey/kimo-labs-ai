@@ -1,0 +1,38 @@
+# Environments
+.venv/
+bin/
+include/
+lib/
+share/
+pyvenv.cfg
+*.pyc
+__pycache__/
+
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Data
+data/db/
+data/docs/
+hf_cache/
+
+# OS
+.DS_Store
+
+# Frontend specifics (Next.js)
+apps/frontend/.next/
+apps/frontend/out/
+apps/frontend/build/
+apps/frontend/.env.local
+apps/frontend/.env.development.local
+apps/frontend/.env.test.local
+apps/frontend/.env.production.local
+
+# Backend specifics
+apps/backend/__pycache__/
+apps/backend/*.pyc
+
+# Local Personal Config
+.gh/
+activate_personal_gh.sh
