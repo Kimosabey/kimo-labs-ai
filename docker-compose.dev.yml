@@ -42,7 +42,7 @@ services:
       - ./apps/frontend:/app
       - /app/node_modules # Preserve node_modules inside container
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_API_URL=http://10.10.20.144:8001
     command: npm run dev
     depends_on:
       - backend
@@ -53,6 +53,6 @@ services:
     environment:
       - CHROMA_URL=http://chroma-server:8000
     ports:
-      - "8003:3000"
+      - "8003:3001"
     depends_on:
       - chroma-server

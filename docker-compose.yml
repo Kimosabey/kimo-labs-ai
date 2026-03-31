@@ -47,7 +47,7 @@ services:
     environment:
       - CHROMA_URL=http://chroma-server:8000
     ports:
-      - "8003:3000"
+      - "8003:3001"
     depends_on:
       - chroma-server
     restart: unless-stopped
