@@ -1,63 +1,68 @@
-# 🏗 Kimo Labs v2: Technical Architecture
+# 🏗 Kimo Labs v3.0: Monolith Architecture
 
-This document outlines the internal systems and architectural decisions powering Kimo Labs v2.
+This document defines the high-fidelity technical standard powering the Kimo Labs research platform.
 
-## 📡 Distributed Multimodal System
+## 📡 Distributed Multimodal System: Node Matrix v3
 
-Kimo Labs operates on a **Single-Node Distributed Architecture**, where data flows between specialized "Engines" orchestrated by the FastAPI backend.
+Kimo Labs operates as a **Hybrid-Cloud Distributed Node Matrix**, balancing local privacy with cloud-scale performance.
 
-### 1. Unified ASR Pipeline (Faster-Whisper)
-*   **Model Management**: Uses `ASRRunner` (Singleton) for concurrent processing.
-*   **Audio Capture**: MediaRecorder API captures PCM-encoded streams, which are converted to `.wav` via Blob processing on the frontend.
-*   **Inference**: Leveraging `WhisperModel`, the backend executes non-blocking transcription in a dedicated thread to ensure immediate API responsiveness.
+### 1. Multi-Engine ASR Orchestrator (Deepgram + Whisper)
+*   **Dual Dispatcher**: The `ASRRunner` acts as a routing engine.
+    *   **Whisper**: Local, 100% private inference using `Faster-Whisper` nodes.
+    *   **Deepgram**: High-performance, ultra-low latency cloud-scale transcription via the Nova-2 model.
+*   **Audio Capture**: Standardized PCM-to-WAV blob processing on the frontend via the MediaRecorder API.
 
 ### 2. Neural TTS Engine (Piper)
-*   **ONNX Integration**: Piper executes as a subprocess call from the Python environment, allowing for highly efficient CPU-based synthesis.
-*   **Speaker Profiles**: Supports multiple voice profiles (`.onnx` + `.json`) located in the `/data/models/piper` directory.
-*   **Audio Streaming**: Audio is generated as a standard WAV file and served as a `FileResponse` for immediate frontend playback.
+*   **ONNX Synthesis**: Piper executes local CPU-bound synthesis at 44.1kHz/48kHz.
+*   **Edge Performance**: Optimized for single-node deployments without GPU requirements.
 
-### 3. Agentic RAG Framework (LlamaIndex)
-*   **Indexing Logic**: Uses `VectorStoreIndex` with persistent storage in ChromaDB.
-*   **Memory Core**: Sessions are managed via a local SQLite database, ensuring conversation history persists across restarts.
-*   **Streaming**: Responses are streamed via SSE (Server-Sent Events) to provide real-time interaction feedback.
+### 3. Agentic Hub & Memory Lake (LlamaIndex)
+*   **Orchestration**: LlamaIndex v0.14+ utilizing the `index.as_chat_engine(chat_mode="react")` abstraction.
+*   **Memory Core**: 
+    *   **SQLite (Primary)**: The recommended "Garage Standard" for local persistence. It provides zero-latency relational storage for chat threads and session metadata.
+    *   **MongoDB (Scale Option)**: Architected for future migration if horizontally scaled multi-tenant clusters are required.
+*   **Vector Space**: ChromaDB persistence for high-dimensional document retrieval.
 
-## 🎨 Design System: "Lab Console"
+## 🎨 Design System: "Monolith"
 
-The v2 frontend utilizes a premium design system named "Lab Console".
+The v3.0 platform utilizes the **Absolute Monolith** design system—a high-contrast, premium grayscale aesthetic.
 
-| Element | Specification | Utility Class |
+| Element | Specification | Rationale |
 | :--- | :--- | :--- |
-| **Typography** | Outfit (Sans), JetBrains Mono (Code) | `font-['Outfit']`, `font-mono` |
-| **Surface** | 60% Transparency, 12px Blur | `glass-panel` |
-| **Cards** | 8% Border, Shimmer Hover | `glass-card` |
-| **Accent** | Cobalt Blue (#3B82F6) | `text-blue-400`, `bg-blue-500` |
-| **Scale** | Desktop-First, Highly Responsive | `@media (min-width: 1024px)` |
+| **Palette** | Black (#050505), Grey (#262626), White (#FFFFFF) | High-contrast WCAG 2.1 Compliance / Premium Lab Look. |
+| **Typography** | Outfit (Sans), JetBrains Mono (Code) | Architectural clarity and technical precision. |
+| **Surface** | 32px Blur, Charcoal Linear Gradients | Structural depth without color-clutter. |
+| **Indicators** | White Shimmer / Glows | Neural activity feedback without legacy blue/green bias. |
 
 ## 📁 Repository Structure
 
 ```
 kimo-labs/
 ├── apps/
-│   ├── backend/            # Python FastAPI service
+│   ├── backend/            # FastAPI Intelligence Node
 │   │   ├── app/
-│   │   │   ├── core/      # Multimodal Engines (ASR, TTS, RAG)
-│   │   │   ├── db/        # SQLite / SQLAlchemy models
-│   │   │   └── main.py    # Core API Gateway
-│   │   └── data/           # Persistent vectors and SQLite
-│   └── frontend/           # Next.js 15+ application
+│   │   │   ├── core/      # Multimodal Dispatchers (asr.py, rag.py)
+│   │   │   └── data/       # Persistent vectors & SQLite Lake
+│   └── frontend/           # Next.js 15+ Monolith UI
 │       ├── src/
-│       │   ├── app/       # Page-level workbenches (ASR, TTS, Chat)
-│       │   ├── components/ # Shared UI & Tools
-│       │   └── hooks/      # Audio & Chat state hooks
-└── README.md              # Project Overview
+│       │   ├── app/       # Individual Workbenches (Hub, Lab, Studio)
+│       │   └── components/ # Unified Monolith UI Components
 ```
 
-## 🔒 Security & Privacy
+## 🌐 System Topology & Ports
 
-*   **100% Local Inference**: No telemetry or data leaves the local machine.
-*   **Isolated Storage**: Vectors and chat logs are stored in the `./data` directory within the workspace.
-*   **Sandbox Mode**: Frontend interactions are constrained to the local API node.
+| Service | Protocol | Port | Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend** | Next.js | `3001` | [Monolith Console](http://localhost:3001) |
+| **Backend** | FastAPI | `8001` | [Intelligence API](http://localhost:8001/docs) |
+| **ChromaDB** | Vector Lake | `8002` | High-dimensional Storage |
+| **Chroma GUI** | Admin | `8003` | Vector Diagnostics |
+
+## 🔒 Modern Engineering Standards
+*   **Hybrid Inference**: Real-time cloud speed (Deepgram) + Local privacy (Whisper/Ollama).
+*   **Atomic Design**: Monolith components are built with high-reusability via Tailwind v4 tokens.
+*   **Persistent Context**: ReAct agent loops with local memory nodes ensure long-term intelligence consistency.
 
 ---
 
-*Kimo Labs Research Nodes - Technical Specifications v2.0*
+*Kimo Labs Research Node - Monolith Standard v3.0*

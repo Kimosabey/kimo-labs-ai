@@ -1,30 +1,29 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import AppShell from "@/components/layout/AppShell";
+import SmoothScroll from "@/components/layout/SmoothScroll";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Kimo Labs",
-  description: "Next-gen local AI hub for RAG and tool-use by Kimo.",
+  title: "Kimo Labs | Multimodal Hub",
+  description: "Advanced local intelligence workbench for ASR, TTS, and Agentic RAG.",
 };
 
-export const SAMPLE_QUESTIONS = [
-  "What is Kimo Labs?",
-  "How do I switch between the models?",
-  "Analyze this code block with DeepSeek.",
-  "What models are currently active?",
-];
-
-import AppShell from "@/components/layout/AppShell";
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <AppShell>
-          {children}
-        </AppShell>
+    <html lang="en" className="dark scroll-smooth" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <body className="font-sans antialiased bg-background text-foreground overflow-hidden h-full" suppressHydrationWarning>
+        <SmoothScroll>
+          <TooltipProvider>
+            <AppShell>
+              {children}
+            </AppShell>
+          </TooltipProvider>
+        </SmoothScroll>
       </body>
     </html>
   );

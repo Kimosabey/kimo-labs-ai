@@ -2,90 +2,114 @@
 
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-background: #050505;
+  --color-foreground: #FFFFFF;
+  
+  --color-card: rgba(18, 18, 18, 0.4);
+  --color-card-foreground: #FFFFFF;
+  
+  --color-popover: #050505;
+  --color-popover-foreground: #FFFFFF;
+  
+  --color-primary: #FFFFFF;
+  --color-primary-foreground: #000000;
+  
+  --color-secondary: #121212;
+  --color-secondary-foreground: #FFFFFF;
+  
+  --color-muted: rgba(38, 38, 38, 0.6);
+  --color-muted-foreground: #A3A3A3;
+  
+  --color-accent: rgba(255, 255, 255, 0.1);
+  --color-accent-foreground: #FFFFFF;
+  
+  --color-border: #262626;
+  --color-input: rgba(18, 18, 18, 0.5);
+}
+
 :root {
-  --background: #0A0C10;
-  --foreground: #F8F8FA;
-  --accent: #94A3B8;
-  --primary: #3B82F6;
-  --glass-bg: rgba(22, 25, 30, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    @apply antialiased;
+  }
 }
 
 @utility glass {
-  background-color: var(--glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-@utility glass-dark {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: rgba(10, 10, 10, 0.9);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.5);
+  border: 1px solid #262626;
 }
 
-@utility text-glow {
-  text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+@utility glass-panel {
+  background: linear-gradient(135deg, rgba(18, 18, 18, 0.4) 0%, rgba(5, 5, 5, 0.7) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid #262626;
 }
 
 @utility glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(18, 18, 18, 0.2);
+  backdrop-filter: blur(16px);
+  border: 1px solid #262626;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@utility text-glow {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
 }
 
-html, body {
-  height: 100%;
-  overflow: hidden;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Outfit', sans-serif;
-  -webkit-font-smoothing: antialiased;
+@utility text-glow-white {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .mask-fade-out {
+    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  }
 }
 
 @keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
 }
 
 .animate-pulse-glow {
   animation: pulse-glow 2s infinite;
+}
+
+/* Base resets */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.architecture-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
 }

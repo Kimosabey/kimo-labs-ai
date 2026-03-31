@@ -75,7 +75,50 @@ class QueryRequest(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """Enhanced health check for all system nodes."""
+    status = {
+        "status": "healthy",
+        "nodes": {
+            "backend": "online",
+            "ollama": "offline",
+            "chromadb": "offline",
+            "sqlite": "offline"
+        }
+    }
+    
+    # Check Ollama
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            res = await client.get(f"{ollama_url}/api/tags")
+            if res.status_code == 200:
+                status["nodes"]["ollama"] = "online"
+    except:
+        pass
+        
+    # Check ChromaDB
+    try:
+        chroma_host = os.getenv("CHROMA_HOST")
+        chroma_port = os.getenv("CHROMA_PORT", "8000")
+        if chroma_host:
+            client = chromadb.HttpClient(host=chroma_host, port=int(chroma_port))
+        else:
+            client = chromadb.PersistentClient(path=os.path.abspath("./db"))
+        
+        if client.heartbeat() > 0:
+            status["nodes"]["chromadb"] = "online"
+    except:
+        pass
+        
+    # Check SQLite
+    try:
+        async with SessionLocal() as db_session:
+            await db_session.execute(select(1))
+            status["nodes"]["sqlite"] = "online"
+    except:
+        pass
+        
+    return status
 
 @app.get("/models")
 async def list_models():
@@ -108,20 +151,34 @@ async def handle_query(request: QueryRequest):
         db_session.add(user_msg)
         await db_session.commit()
 
+    # Initialize the high-performance agent workflow
     agent = get_agent(index, model_name=request.model)
 
     async def event_generator():
         try:
             full_answer = ""
-            # Use LlamaIndex stream_chat for the agent
-            response_gen = agent.stream_chat(request.query)
+            # The new ReActAgent workflow uses .run()
+            # In v0.14+, this returns a handler that we iterate asychronously
+            handler = agent.run(input=request.query)
             
-            # Streaming the chunks
-            for chunk in response_gen.response_gen:
-                full_answer += chunk
-                yield f"data: {json.dumps({'type': 'answer', 'content': chunk, 'session_id': active_session_id})}\n\n"
-                await asyncio.sleep(0.01) # Small delay for smoother UI streaming
+            async for event in handler:
+                # We check for generic token/text events if available, 
+                # or handle logic based on events.
+                # For this implementation, we look for AgentChatEvent or simple token yields.
+                # Since workflows are generic, we can also check the result at the end.
+                
+                # Check for token events (if implemented in the specific workflow)
+                if hasattr(event, "token"):
+                    chunk = str(event.token)
+                    full_answer += chunk
+                    yield f"data: {json.dumps({'type': 'answer', 'content': chunk, 'session_id': active_session_id})}\n\n"
             
+            # Get the final result from the workflow
+            final_result = await handler
+            if not full_answer:
+                full_answer = str(final_result)
+                yield f"data: {json.dumps({'type': 'answer', 'content': full_answer, 'session_id': active_session_id})}\n\n"
+
             # Finalize and persist assistant message
             async with SessionLocal() as db_session:
                 assistant_msg = MessageModel(
@@ -129,7 +186,7 @@ async def handle_query(request: QueryRequest):
                     session_id=active_session_id,
                     role="assistant",
                     content=full_answer,
-                    sources=None # Optional: collect sources from agent if needed
+                    sources=None
                 )
                 db_session.add(assistant_msg)
                 await db_session.commit()
@@ -165,8 +222,11 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/asr")
-async def handle_asr(file: UploadFile = File(...)):
-    """Transcribe an audio file using Whisper."""
+async def handle_asr(
+    file: UploadFile = File(...),
+    provider: str = Form("whisper")
+):
+    """Transcribe an audio file using either Whisper or Deepgram."""
     # Create temp file to store uploaded audio
     temp_dir = tempfile.gettempdir()
     file_path = os.path.join(temp_dir, f"asr_{uuid.uuid4()}_{file.filename}")
@@ -175,7 +235,7 @@ async def handle_asr(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        result = await asr_runner.transcribe(file_path)
+        result = await asr_runner.transcribe(file_path, provider=provider)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

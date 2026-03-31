@@ -61,7 +61,7 @@ def build_or_load_index():
     
     return index
 
-from llama_index.core.agent import ReActAgent
+from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
 
 def ingest_documents(index, file_path):
@@ -72,29 +72,48 @@ def ingest_documents(index, file_path):
         index.insert(doc)
     return True
 
-def get_agent(index, model_name="llama3"):
-    # Dynamically select the LLM for this query
+def get_llm(model_name="llama3"):
+    """
+    Configurable LLM Node. 
+    Supports local Ollama currently, but architected for Gemini/OpenAI cloud models.
+    """
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
     ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    llm = Ollama(model=model_name, base_url=ollama_url, request_timeout=120.0)
     
-    # Create the knowledge base tool
-    query_engine = index.as_query_engine(llm=llm)
+    if provider == "ollama":
+        return Ollama(model=model_name, base_url=ollama_url, request_timeout=120.0)
+    elif provider == "gemini":
+        # Placeholder for future Gemini integration
+        # from llama_index.llms.gemini import Gemini
+        # return Gemini(model="models/gemini-pro", api_key=os.getenv("GOOGLE_API_KEY"))
+        return Ollama(model=model_name, base_url=ollama_url)
+    else:
+        return Ollama(model=model_name, base_url=ollama_url)
+
+def get_agent(index, model_name="llama3"):
+    # Dynamically select the LLM node
+    llm = get_llm(model_name)
     
-    tools = [
-        QueryEngineTool(
-            query_engine=query_engine,
-            metadata=ToolMetadata(
-                name="knowledge_base",
-                description="Use this tool to lookup information from Kimo Labs' local knowledge base.",
-            ),
-        ),
-    ]
+    # Wrap the vector index in a QueryEngineTool
+    query_tool = QueryEngineTool(
+        query_engine=index.as_query_engine(streaming=True),
+        metadata=ToolMetadata(
+            name="vector_lake",
+            description="Semantic search across Kimo's Garage intelligence documentation. Use this for RAG queries."
+        )
+    )
     
-    # Initialize the ReAct agent
-    agent = ReActAgent.from_tools(tools, llm=llm, verbose=True)
+    # Initialize the high-performance ReActAgent Workflow
+    agent = ReActAgent(
+        tools=[query_tool],
+        llm=llm,
+        verbose=True
+    )
     return agent
 
-def query_rag(index, query_text, model_name="llama3"):
+async def query_rag(index, query_text, model_name="llama3"):
     agent = get_agent(index, model_name=model_name)
-    response = agent.chat(query_text)
-    return response
+    # The new ReActAgent workflow uses .run()
+    handler = agent.run(input=query_text)
+    # Return the handler for event-based streaming in main.py
+    return handler

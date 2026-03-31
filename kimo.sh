@@ -31,8 +31,8 @@ case "$1" in
         
         # Start ChromaDB locally if docker is available
         if docker ps >/dev/null 2>&1; then
-            log_info "Starting ChromaDB container for local dev..."
-            docker-compose up -d chroma-server
+            log_info "Starting ChromaDB service and GUI for local dev..."
+            docker-compose up -d chroma-server chroma-admin
         fi
 
         # Start Backend
@@ -53,8 +53,9 @@ case "$1" in
         cd - > /dev/null
 
         log_success "Kimo Labs is running (Local)!"
-        log_info "Frontend: http://localhost:3000"
-        log_info "Backend: http://localhost:8001"
+        log_info "Frontend  : http://10.10.20.144:3001"
+        log_info "Backend   : http://10.10.20.144:8001"
+        log_info "Chroma GUI: http://10.10.20.144:8003"
         
         # Handle termination
         trap "kill $BACKEND_PID $FRONTEND_PID; exit" SIGINT SIGTERM
@@ -65,8 +66,9 @@ case "$1" in
         log_info "Starting Kimo Labs in STABLE DOCKER mode..."
         docker-compose -f docker-compose.yml up -d --build
         log_success "Kimo Labs is running in background!"
-        log_info "Frontend: http://localhost:3000"
-        log_info "Backend: http://localhost:8001"
+        log_info "Frontend  : http://10.10.20.144:3001"
+        log_info "Backend   : http://10.10.20.144:8001"
+        log_info "Chroma GUI: http://10.10.20.144:8003"
         ;;
 
     up-dev)

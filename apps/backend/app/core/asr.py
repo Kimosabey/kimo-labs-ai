@@ -9,23 +9,18 @@ logger = logging.getLogger("ASR")
 
 class ASRRunner:
     def __init__(self, model_size="base", device="cpu", compute_type="int8"):
-        """
-        Initialize the ASR Runner.
-        - model_size: 'tiny', 'base', 'small', 'medium', 'large-v3'
-        - device: 'cpu' or 'cuda' (for local Mac, we use 'cpu' or 'auto')
-        """
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
         self.model = None
         self._lock = asyncio.Lock()
+        self.deepgram_api_key = os.getenv("DEEPGRAM_API_KEY")
 
-    async def load_model(self):
+    async def load_whisper(self):
         async with self._lock:
             if self.model is None:
                 try:
                     logger.info(f"Loading Whisper model: {self.model_size} on {self.device}...")
-                    # Run the blocking model loading in a thread to avoid blocking the event loop
                     self.model = await asyncio.to_thread(
                         WhisperModel, 
                         self.model_size, 
@@ -38,42 +33,69 @@ class ASRRunner:
                     raise
         return self.model
 
-    async def transcribe(self, audio_path: str):
+    async def transcribe(self, audio_path: str, provider: str = "whisper"):
         """
-        Transcribe an audio file and return the full text and metadata.
+        Transcribe an audio file using either local Whisper or cloud Deepgram.
         """
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-        model = await self.load_model()
+        if provider.lower() == "deepgram":
+            if not self.deepgram_api_key:
+                raise ValueError("DEEPGRAM_API_KEY is not set.")
+            return await self._transcribe_deepgram(audio_path)
         
-        try:
-            # model.transcribe is blocking inside the generator, using asyncio.to_thread for the generator execution would be complex
-            # For local use, running the generator iteration in a thread is safer
-            def run_transcription():
-                segments, info = model.transcribe(audio_path, beam_size=5)
-                full_text = ""
-                results = []
-                for segment in segments:
-                    full_text += segment.text + " "
-                    results.append({
-                        "start": segment.start,
-                        "end": segment.end,
-                        "text": segment.text.strip()
-                    })
-                return full_text.strip(), info, results
+        return await self._transcribe_whisper(audio_path)
 
-            text, info, segments = await asyncio.to_thread(run_transcription)
+    async def _transcribe_whisper(self, audio_path: str):
+        model = await self.load_whisper()
+        def run_transcription():
+            segments, info = model.transcribe(audio_path, beam_size=5)
+            full_text = ""
+            results = []
+            for segment in segments:
+                full_text += segment.text + " "
+                results.append({
+                    "start": segment.start,
+                    "end": segment.end,
+                    "text": segment.text.strip()
+                })
+            return full_text.strip(), info, results
+
+        text, info, segments = await asyncio.to_thread(run_transcription)
+        return {
+            "text": text,
+            "language": info.language,
+            "language_probability": info.language_probability,
+            "segments": segments,
+            "provider": "whisper"
+        }
+
+    async def _transcribe_deepgram(self, audio_path: str):
+        import httpx
+        url = "https://api.deepgram.com/v1/listen?smart_format=true&model=nova-2&language=en-US"
+        headers = {
+            "Authorization": f"Token {self.deepgram_api_key}",
+            "Content-Type": "audio/wav"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            with open(audio_path, "rb") as audio:
+                response = await client.post(url, headers=headers, content=audio, timeout=60.0)
+            
+            if response.status_code != 200:
+                logger.error(f"Deepgram API error: {response.text}")
+                raise Exception(f"Deepgram API returned {response.status_code}")
+                
+            data = response.json()
+            transcript = data["results"]["channels"][0]["alternatives"][0]["transcript"]
             
             return {
-                "text": text,
-                "language": info.language,
-                "language_probability": info.language_probability,
-                "segments": segments
+                "text": transcript,
+                "language": "en",
+                "language_probability": 1.0,
+                "segments": [], # Deepgram returns segments differently, adding base support for now
+                "provider": "deepgram"
             }
-        except Exception as e:
-            logger.error(f"Transcription error: {e}")
-            raise
 
-# Singleton instance
 asr_runner = ASRRunner()

@@ -37,7 +37,7 @@ services:
     container_name: kimo-labs-frontend-dev
     working_dir: /app
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./apps/frontend:/app
       - /app/node_modules # Preserve node_modules inside container
@@ -46,3 +46,13 @@ services:
     command: npm run dev
     depends_on:
       - backend
+
+  chroma-admin:
+    image: fengzhichao/chromadb-admin:latest
+    container_name: kimo-labs-chroma-admin-dev
+    environment:
+      - CHROMA_URL=http://chroma-server:8000
+    ports:
+      - "8003:3000"
+    depends_on:
+      - chroma-server

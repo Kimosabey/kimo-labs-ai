@@ -21,6 +21,28 @@ Kimo Labs is a high-fidelity, local-first research platform designed for orchest
 *   **Local ONNX Runtime**: CPU-optimized execution with diverse voice profiles.
 *   **Studio Workbench**: Dedicated interface for script processing and audio export.
 
+## 🚀 Quick Start (Unified CLI)
+
+The easiest way to manage Kimo Labs is via the unified `kimo.sh` script.
+
+1.  **Launch All Services**
+    ```bash
+    ./kimo.sh up
+    ```
+    *This starts the Backend, Frontend, and ChromaDB in Docker.*
+
+2.  **Native Development (Hot-Reload)**
+    ```bash
+    ./kimo.sh dev
+    ```
+
+3.  **Monitor Performance**
+    ```bash
+    ./kimo.sh logs
+    ```
+
+---
+
 ## 🛠 Tech Stack
 
 | Component | Technology | Rationale |
@@ -31,35 +53,6 @@ Kimo Labs is a high-fidelity, local-first research platform designed for orchest
 | **ASR Engine** | Faster-Whisper | State-of-the-art transcription speed and accuracy. |
 | **TTS Engine** | Piper | High-quality neural speech synthesis for edge devices. |
 | **Intelligence** | Ollama | Unified local LLM orchestration. |
-
-## 🚀 Quick Start
-
-### Prerequisites
-*   Python 3.10+
-*   Node.js 18+
-*   [Ollama](https://ollama.ai/) installed and running.
-
-### Installation
-
-1.  **Clone & Setup**
-    ```bash
-    git clone https://github.com/your-repo/kimo-labs.git
-    cd kimo-labs
-    ```
-
-2.  **Backend Initialization**
-    ```bash
-    cd apps/backend
-    pip install -r requirements.txt
-    python -m app.main
-    ```
-
-3.  **Frontend Initialization**
-    ```bash
-    cd apps/frontend
-    npm install
-    npm run dev
-    ```
 
 ## 🏗 Architecture
 
