@@ -3,7 +3,10 @@ from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageCon
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.ollama import Ollama
+from llama_index.core.storage.kvstore import RedisKVStore
+from llama_index.core.ingestion import IngestionCache
 import chromadb
+import redis
 
 # Initialize Global Settings
 # We use BAAI/bge-small-en-v1.5 which is a small and efficient open-source model
@@ -15,6 +18,20 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 print("Connecting to local Ollama...")
 ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 Settings.llm = Ollama(model="llama3", base_url=ollama_url, request_timeout=120.0)
+
+def get_cache():
+    """
+    Initialize the Valkey-backed Ingestion Cache.
+    Prevents redundant embedding computation on the M4 Neural Engine.
+    """
+    cache_host = os.getenv("CACHE_HOST", "localhost")
+    cache_port = os.getenv("CACHE_PORT", "6379")
+    try:
+        kv_store = RedisKVStore(host=cache_host, port=int(cache_port))
+        return IngestionCache(kv_store=kv_store, collection="kimo_ingestion_cache")
+    except Exception as e:
+        print(f"⚠️ Cache Node Offline: {e}. Falling back to volatile memory.")
+        return None
 
 def build_or_load_index():
     # Define persist directory (ensure it's absolute mapped to project root data)
@@ -53,8 +70,11 @@ def build_or_load_index():
         
         documents = SimpleDirectoryReader(docs_path).load_data()
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        
+        # Apply Global Ingestion Cache
+        cache = get_cache()
         index = VectorStoreIndex.from_documents(
-            documents, storage_context=storage_context
+            documents, storage_context=storage_context, cache=cache
         )
         print(f"Index built and persisted to {db_path}")
     

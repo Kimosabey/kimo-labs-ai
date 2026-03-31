@@ -57,14 +57,16 @@ kimo-labs/
 | **Backend** | FastAPI | `8001` | [Intelligence API](http://10.10.20.144:8001/docs) |
 | **ChromaDB** | Vector Lake | `8002` | High-dimensional Storage |
 | **Chroma GUI** | Admin | `8003` | [Vector Diagnostics](http://10.10.20.144:8003) |
+| **Valkey** | Cache Node | `6379` | Semantic Response Cache |
 
 ### 🚀 Comprehensive Ignition Commands
 
 **1. Launch the Neural Memory & Diagnostic Lake (Docker)**  
-Start the backend persistence and its administrative GUI in the background:
+Start the backend persistence, diagnostics, and semantic cache in the background:
 ```bash
-docker-compose up -d chroma-server chroma-admin
+docker-compose up -d chroma-server chroma-admin valkey
 ```
+*Note: Valkey is configured with a 512MB RAM cap to protect Apple M4 shared memory stability.*
 *Note for GUI Setup: When navigating to `http://10.10.20.144:8003`, ensure the **Chroma Connection String** is set to `http://10.10.20.144:8002` (the actual DB port), leaving tenant and database as default.*
 
 **2. Ignite the Core Intelligence Hub (FastAPI)**  

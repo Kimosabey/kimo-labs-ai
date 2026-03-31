@@ -19,6 +19,8 @@ import chromadb
 
 from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.llms import ChatMessage
+import redis
+import hashlib
 
 app = FastAPI(title="Kimo Labs", description="Next-gen local AI hub for RAG and tool-use.")
 
@@ -38,6 +40,11 @@ async def startup_event():
     global index
     await init_db()
     index = build_or_load_index()
+
+# Initialize Valkey connection for rapid response caching
+cache_host = os.getenv("CACHE_HOST", "localhost")
+cache_port = os.getenv("CACHE_PORT", "6379")
+redis_client = redis.Redis(host=cache_host, port=int(cache_port), decode_responses=True)
 
 @app.get("/sessions")
 async def get_sessions():
@@ -171,12 +178,21 @@ async def handle_query(request: QueryRequest):
     query_text = request.query.lower().strip()
     is_complex = any(keyword in query_text for keyword in ["summarize", "check", "document", "file", "diagnostic", "status", "query", "search", "lake", "vector", "find"])
 
+    # Generate query fingerprint for Semantic Cache lookup
+    query_hash = f"cache:v1:{hashlib.sha256(query_text.encode()).hexdigest()}"
+
     async def event_generator():
         try:
             full_answer = ""
             
-            # Fast-Path Router Bypass: Skips Tool loops entirely for instant conversational TTFT
-            if not is_complex and len(query_text.split()) < 10:
+            # ⚡ VALKEY FAST-PATH: Check for existing cached response
+            cached_res = redis_client.get(query_hash)
+            if cached_res:
+                yield f"data: {json.dumps({'type': 'answer', 'content': cached_res, 'session_id': active_session_id})}\n\n"
+                full_answer = cached_res
+            
+            # Cache Miss: Proceed with Inference
+            elif not is_complex and len(query_text.split()) < 10:
                 llm = get_llm(request.model)
                 system_msg = ChatMessage(role="system", content="You are Kimo Labs AI. Provide concise, friendly, and natural conversational replies.")
                 messages = [system_msg] + chat_history + [ChatMessage(role="user", content=request.query)]
@@ -207,6 +223,10 @@ async def handle_query(request: QueryRequest):
                 )
                 db_session.add(assistant_msg)
                 await db_session.commit()
+                
+            # 🔥 Commit to Valkey Cache for future instant retrieval
+            if full_answer and not cached_res:
+                redis_client.setex(query_hash, 3600, full_answer) # 1-hour TTL for high-frequency cache
                 
             yield "data: [DONE]\n\n"
         except Exception as e:

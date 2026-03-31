@@ -13,3 +13,5 @@ aiosqlite
 faster-whisper
 python-multipart
 piper-tts
+redis
+llama-index-storage-kvstore-redis
