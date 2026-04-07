@@ -3,7 +3,7 @@ from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageCon
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.ollama import Ollama
-from llama_index.core.storage.kvstore import RedisKVStore
+from llama_index.storage.kvstore.redis import RedisKVStore
 from llama_index.core.ingestion import IngestionCache
 import chromadb
 import redis
@@ -12,6 +12,45 @@ import redis
 # We use BAAI/bge-small-en-v1.5 which is a small and efficient open-source model
 print("Loading local embedding model...")
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+def get_chroma_client():
+    db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/db"))
+    chroma_host = os.getenv("CHROMA_HOST")
+    chroma_port = os.getenv("CHROMA_PORT", "8000")
+    if chroma_host:
+        return chromadb.HttpClient(host=chroma_host, port=int(chroma_port))
+    return chromadb.PersistentClient(path=db_path)
+
+def check_semantic_cache(query_text):
+    """Checks if a similar query exists in the semantic cache (ChromaDB)."""
+    try:
+        client = get_chroma_client()
+        cache = client.get_or_create_collection("kimo_semantic_cache")
+        # Query for the most similar previous response
+        results = cache.query(
+            query_texts=[query_text],
+            n_results=1
+        )
+        if results["distances"] and results["distances"][0] and results["distances"][0][0] < 0.15:
+            return results["metadatas"][0][0]["answer"]
+        return None
+    except Exception as e:
+        print(f"Semantic Cache Miss/Error: {e}")
+        return None
+
+def update_semantic_cache(query_text, answer_text):
+    """Persists a query/answer pair to the semantic cache."""
+    try:
+        client = get_chroma_client()
+        cache = client.get_or_create_collection("kimo_semantic_cache")
+        import uuid
+        cache.add(
+            ids=[str(uuid.uuid4())],
+            documents=[query_text],
+            metadatas=[{"answer": answer_text}]
+        )
+    except Exception as e:
+        print(f"Failed to update semantic cache: {e}")
 
 # Setup Ollama as our local LLM
 # When running in Docker, set OLLAMA_BASE_URL to http://host.docker.internal:11434
@@ -81,8 +120,48 @@ def build_or_load_index():
     return index
 
 from llama_index.core.agent.workflow import ReActAgent
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.core.memory import ChatMemoryBuffer
+import psutil
+import platform
+
+def get_system_stats():
+    """Returns real-time system performance metrics for the Mac M4 node."""
+    cpu = psutil.cpu_percent()
+    mem = psutil.virtual_memory().percent
+    return f"CPU: {cpu}% | RAM: {mem}% | Engine: Apple M4 Neural"
+
+def get_collection_diagnostics():
+    """Returns diagnostics for the ChromaDB vector lake."""
+    db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/db"))
+    chroma_host = os.getenv("CHROMA_HOST")
+    chroma_port = os.getenv("CHROMA_PORT", "8000")
+    
+    try:
+        if chroma_host:
+            client = chromadb.HttpClient(host=chroma_host, port=int(chroma_port))
+        else:
+            client = chromadb.PersistentClient(path=db_path)
+            
+        collections = client.list_collections()
+        res = []
+        for c in collections:
+            res.append(f"Node: {c.name} | Fragments: {c.count()}")
+        return "\n".join(res)
+    except Exception as e:
+        return f"Diagnostics Offline: {e}"
+
+system_stats_tool = FunctionTool.from_defaults(
+    fn=get_system_stats,
+    name="system_monitor",
+    description="Get real-time CPU and RAM stats from the local M4 node."
+)
+
+diagnostics_tool = FunctionTool.from_defaults(
+    fn=get_collection_diagnostics,
+    name="vector_diagnostics",
+    description="Check the health and fragment count of the semantic vector collections."
+)
 
 def ingest_documents(index, file_path):
     """Ingest a new file into the existing index."""
@@ -135,7 +214,7 @@ def get_agent(index, model_name="llama3", chat_history=None):
     
     # Initialize the high-performance ReActAgent Workflow
     agent = ReActAgent(
-        tools=[query_tool],
+        tools=[query_tool, system_stats_tool, diagnostics_tool],
         llm=llm,
         memory=memory,
         context=system_prompt,

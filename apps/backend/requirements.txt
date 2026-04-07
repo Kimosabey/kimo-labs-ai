@@ -8,10 +8,9 @@ sentence-transformers
 fastapi
 uvicorn
 httpx
-sqlalchemy
-aiosqlite
 faster-whisper
 python-multipart
 piper-tts
 redis
 llama-index-storage-kvstore-redis
+motor

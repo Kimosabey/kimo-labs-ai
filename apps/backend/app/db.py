@@ -1,44 +1,58 @@
 import os
-from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from motor.motor_asyncio import AsyncIOMotorClient
 import datetime
+import uuid
 
-# Define the database path (persisted in project root data/db)
-DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/db"))
-if not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR)
+# MongoDB Configuration
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017/kimo_labs")
+client = AsyncIOMotorClient(MONGO_URL)
+db = client.get_database()
 
-DB_URL = f"sqlite+aiosqlite:///{DB_DIR}/history.db"
-
-Base = declarative_base()
-
-class SessionModel(Base):
-    __tablename__ = "sessions"
-    
-    id = Column(String, primary_key=True)
-    title = Column(String, default="New Conversation")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
-    messages = relationship("MessageModel", back_populates="session", cascade="all, delete-orphan")
-
-class MessageModel(Base):
-    __tablename__ = "messages"
-    
-    id = Column(String, primary_key=True)
-    session_id = Column(String, ForeignKey("sessions.id"), index=True)
-    role = Column(String) # "user" or "assistant"
-    content = Column(Text)
-    sources = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    
-    session = relationship("SessionModel", back_populates="messages")
-
-# Setup Async DB
-engine = create_async_engine(DB_URL)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# Collections
+sessions_col = db.get_collection("sessions")
+messages_col = db.get_collection("messages")
 
 async def init_db():
-    async with engine.begin() as conn:
-        # For development ease, we'll create tables
-        await conn.run_sync(Base.metadata.create_all)
+    """Initialize indexes for performance."""
+    # Ensure indexes for rapid retrieval
+    await sessions_col.create_index([("created_at", -1)])
+    await messages_col.create_index([("session_id", 1), ("timestamp", 1)])
+    print("MongoDB Layers Initialized.")
+
+class MongoSession:
+    """Helper class to mimic the old session interface if needed, 
+    but we'll mostly use direct collection calls for performance."""
+    pass
+
+# Helper functions to maintain a clean main.py
+async def get_all_sessions():
+    cursor = sessions_col.find().sort("created_at", -1)
+    return await cursor.to_list(length=100)
+
+async def get_session_messages(session_id: str):
+    cursor = messages_col.find({"session_id": session_id}).sort("timestamp", 1)
+    return await cursor.to_list(length=1000)
+
+async def save_message(session_id: str, role: str, content: str, sources=None):
+    message_id = str(uuid.uuid4())
+    message = {
+        "_id": message_id,
+        "session_id": session_id,
+        "role": role,
+        "content": content,
+        "sources": sources,
+        "timestamp": datetime.datetime.utcnow()
+    }
+    await messages_col.insert_one(message)
+    return message
+
+async def ensure_session(session_id: str, title: str = "New Conversation"):
+    session = await sessions_col.find_one({"_id": session_id})
+    if not session:
+        session = {
+            "_id": session_id,
+            "title": title[:30] + "...",
+            "created_at": datetime.datetime.utcnow()
+        }
+        await sessions_col.insert_one(session)
+    return session

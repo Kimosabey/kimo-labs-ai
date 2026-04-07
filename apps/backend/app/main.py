@@ -1,11 +1,29 @@
 from fastapi import FastAPI, HTTPException
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 from pydantic import BaseModel
 from typing import List, Optional
-from backend.app.core.rag import build_or_load_index, get_agent, ingest_documents, get_llm
-from backend.app.core.asr import asr_runner
-from backend.app.core.tts import tts_runner
-from backend.app.db import AsyncSessionLocal as SessionLocal, init_db, SessionModel, MessageModel
+from app.core.rag import (
+    build_or_load_index, 
+    get_agent, 
+    ingest_documents, 
+    get_llm, 
+    check_semantic_cache, 
+    update_semantic_cache
+)
+from app.core.asr import asr_runner
+from app.core.tts import tts_runner
+from app.db import (
+    sessions_col, 
+    messages_col, 
+    init_db, 
+    get_all_sessions, 
+    get_session_messages, 
+    save_message, 
+    ensure_session
+)
 import os
 import shutil
 import uuid
@@ -14,13 +32,13 @@ import asyncio
 import tempfile
 from fastapi import UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy import select
 import chromadb
 
 from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.llms import ChatMessage
 import redis
 import hashlib
+from livekit import api
 
 app = FastAPI(title="Kimo Labs", description="Next-gen local AI hub for RAG and tool-use.")
 
@@ -48,23 +66,15 @@ redis_client = redis.Redis(host=cache_host, port=int(cache_port), decode_respons
 
 @app.get("/sessions")
 async def get_sessions():
-    """Fetch all chat sessions from the history."""
-    async with SessionLocal() as db_session:
-        result = await db_session.execute(select(SessionModel).order_by(SessionModel.created_at.desc()))
-        sessions = result.scalars().all()
-        return [{"id": s.id, "title": s.title, "created_at": s.created_at} for s in sessions]
+    """Fetch all chat sessions from the history via MongoDB."""
+    sessions = await get_all_sessions()
+    return [{"id": s["_id"], "title": s.get("title", "No Title"), "created_at": s["created_at"]} for s in sessions]
 
 @app.get("/sessions/{session_id}/messages")
 async def get_messages(session_id: str):
-    """Fetch all messages for a specific session."""
-    async with SessionLocal() as db_session:
-        result = await db_session.execute(
-            select(MessageModel)
-            .where(MessageModel.session_id == session_id)
-            .order_by(MessageModel.timestamp.asc())
-        )
-        messages = result.scalars().all()
-        return messages
+    """Fetch all messages for a specific session via MongoDB."""
+    messages = await get_session_messages(session_id)
+    return messages
 
 class SourceNode(BaseModel):
     text: str
@@ -118,11 +128,10 @@ async def health_check():
     except:
         pass
         
-    # Check SQLite
+    # Check MongoDB
     try:
-        async with SessionLocal() as db_session:
-            await db_session.execute(select(1))
-            status["nodes"]["sqlite"] = "online"
+        await sessions_col.find_one()
+        status["nodes"]["mongodb"] = "online"
     except:
         pass
         
@@ -148,28 +157,16 @@ async def handle_query(request: QueryRequest):
     
     active_session_id = request.session_id or str(uuid.uuid4())
     
-    # Save User message to DB
-    async with SessionLocal() as db_session:
-        result = await db_session.execute(select(SessionModel).where(SessionModel.id == active_session_id))
-        session_exists = result.scalar_one_or_none()
-        if not session_exists:
-            new_session = SessionModel(id=active_session_id, title=request.query[:30] + "...")
-            db_session.add(new_session)
-        user_msg = MessageModel(id=str(uuid.uuid4()), session_id=active_session_id, role="user", content=request.query)
-        db_session.add(user_msg)
-        await db_session.commit()
-
-        # Fetch past messages to inject into Memory (excluding the current user_msg we just saved)
-        past_msgs = await db_session.execute(
-            select(MessageModel)
-            .where(MessageModel.session_id == active_session_id)
-            .where(MessageModel.id != user_msg.id)
-            .order_by(MessageModel.timestamp.asc())
-        )
-        chat_history = [
-            ChatMessage(role=m.role, content=m.content) 
-            for m in past_msgs.scalars().all() if m.role in ("user", "assistant")
-        ]
+    # Save User message and ensure session in MongoDB
+    await ensure_session(active_session_id, title=request.query)
+    user_msg_data = await save_message(active_session_id, role="user", content=request.query)
+    
+    # Fetch past messages to inject into Memory (excluding the current user_msg we just saved)
+    past_msgs = await get_session_messages(active_session_id)
+    chat_history = [
+        ChatMessage(role=m["role"], content=m["content"]) 
+        for m in past_msgs if m["_id"] != user_msg_data["_id"] and m["role"] in ("user", "assistant")
+    ]
 
     # Initialize the high-performance agent workflow with injected Chat Memory
     agent = get_agent(index, model_name=request.model, chat_history=chat_history)
@@ -185,8 +182,15 @@ async def handle_query(request: QueryRequest):
         try:
             full_answer = ""
             
-            # ⚡ VALKEY FAST-PATH: Check for existing cached response
+            # ⚡ VALKEY FAST-PATH: Check for literal cache
             cached_res = redis_client.get(query_hash)
+            
+            # 🧠 SEMANTIC FAST-PATH: Check for similar query meaning (New Optimized Tier)
+            if not cached_res:
+                cached_res = check_semantic_cache(request.query)
+                if cached_res:
+                    yield f"data: {json.dumps({'type': 'thought', 'content': '💡 SEMANTIC_CACHE_HIT: Similar query found in vector-lake.', 'session_id': active_session_id})}\n\n"
+
             if cached_res:
                 yield f"data: {json.dumps({'type': 'answer', 'content': cached_res, 'session_id': active_session_id})}\n\n"
                 full_answer = cached_res
@@ -202,31 +206,43 @@ async def handle_query(request: QueryRequest):
                         full_answer += chunk.delta
                         yield f"data: {json.dumps({'type': 'answer', 'content': chunk.delta, 'session_id': active_session_id})}\n\n"
             else:
-                # Agentic ReAct Pipeline
+                # Agentic ReAct Pipeline with Event Streaming (LlamaIndex 0.12+ Workflow Pattern)
                 handler = agent.run(user_msg=request.query)
                 
-                # Await final clean result to prevent streaming internal "Thought:" chains which break the TTS engine logic
+                async for event in handler.stream_events():
+                    # Extract reasoning or tool usage from workflow events
+                    content = ""
+                    event_type = type(event).__name__
+                    
+                    if "ToolCall" in event_type:
+                        # Extract tool name from event if possible
+                        tool_name = getattr(event, "tool_name", getattr(event, "name", "unknown_tool"))
+                        content = f"⚡ EXECUTING_TOOL: {tool_name}"
+                    elif "Thought" in event_type or "Input" in event_type:
+                        content = getattr(event, "thought", getattr(event, "msg", str(event)))
+                    
+                    if content and len(content) > 2:
+                        yield f"data: {json.dumps({'type': 'thought', 'content': content, 'session_id': active_session_id})}\n\n"
+                
+                # Await final clean result for the UI
                 final_result = await handler
                 full_answer = str(final_result)
                 
-                # Flush the clean response out to the UI immediately
+                # Flush the clean response out to the UI
                 yield f"data: {json.dumps({'type': 'answer', 'content': full_answer, 'session_id': active_session_id})}\n\n"
 
-            # Finalize and persist assistant message
-            async with SessionLocal() as db_session:
-                assistant_msg = MessageModel(
-                    id=str(uuid.uuid4()),
-                    session_id=active_session_id,
-                    role="assistant",
-                    content=full_answer,
-                    sources=None
-                )
-                db_session.add(assistant_msg)
-                await db_session.commit()
+            # Finalize and persist assistant message in MongoDB
+            await save_message(
+                session_id=active_session_id,
+                role="assistant",
+                content=full_answer,
+                sources=None
+            )
                 
-            # 🔥 Commit to Valkey Cache for future instant retrieval
+            # 🔥 Commit to Valkey and Semantic Cache
             if full_answer and not cached_res:
-                redis_client.setex(query_hash, 3600, full_answer) # 1-hour TTL for high-frequency cache
+                redis_client.setex(query_hash, 3600, full_answer)
+                update_semantic_cache(request.query, full_answer)
                 
             yield "data: [DONE]\n\n"
         except Exception as e:
@@ -317,6 +333,28 @@ async def list_collections():
         return res
     except Exception as e:
         return []
+
+@app.get("/token")
+async def get_token(room: str, identity: str):
+    """Generate a LiveKit access token for a specific room and identity."""
+    try:
+        api_key = os.getenv("LIVEKIT_API_KEY")
+        api_secret = os.getenv("LIVEKIT_API_SECRET")
+        
+        if not api_key or not api_secret:
+            raise HTTPException(status_code=500, detail="LiveKit credentials not configured")
+            
+        token = api.AccessToken(api_key, api_secret) \
+            .with_identity(identity) \
+            .with_name(identity) \
+            .with_grants(api.VideoGrants(room_join=True, room=room))
+            
+        return {"token": token.to_jwt()}
+    except Exception as e:
+        print(f"Token generation error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
