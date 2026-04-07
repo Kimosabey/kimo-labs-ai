@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Mic, Volume2, ArrowRight, Sparkles, Activity, Cpu, Database, Zap } from "lucide-react";
+import { MessageSquare, Mic, Volume2, ArrowRight, Sparkles, Activity, Cpu, Database, Zap, Radio } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -90,13 +90,22 @@ export default function Home() {
 
   const tools = [
     {
+      title: "Voice Agent Lab",
+      description: "Real-time neural link with Kimo using LiveKit and Deepgram for low-latency multimodal research.",
+      icon: Radio,
+      href: "/voice",
+      badge: "Operational",
+      statusColor: "text-white border-white/20 bg-white/5",
+      delay: 0.1
+    },
+    {
       title: "Agentic Hub",
       description: "Advanced RAG-powered chat interface with sub-surface memory and local tool-use orchestrator.",
       icon: MessageSquare,
       href: "/chat",
       badge: "Operational",
-      statusColor: "text-white border-white/20 bg-white/5",
-      delay: 0.1
+      statusColor: "text-emerald-400/80 border-emerald-500/20 bg-emerald-500/5",
+      delay: 0.2
     },
     {
       title: "Speech Lab",

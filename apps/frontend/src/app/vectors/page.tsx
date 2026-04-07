@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Database, Search, RefreshCw, Layers, FileText, Activity, Terminal, Trash2, ArrowRight, Zap, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ export default function VectorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+  const API_URL = getApiBaseUrl();
 
   const fetchCollections = async () => {
     setIsLoading(true);

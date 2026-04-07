@@ -7,6 +7,7 @@ import {
   Loader2, Music, Trash2, Download, Activity, Zap, Cpu, Waves, Terminal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -24,7 +25,7 @@ export default function ASRPage() {
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+  const API_URL = getApiBaseUrl();
 
   const startRecording = async () => {
     try {
@@ -372,4 +373,3 @@ export default function ASRPage() {
     </div>
   );
 }
-

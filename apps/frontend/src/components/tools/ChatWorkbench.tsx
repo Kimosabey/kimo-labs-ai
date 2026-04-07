@@ -7,6 +7,7 @@ import {
   Mic, Square, Volume2, VolumeX, RotateCcw, Activity, Cpu, Command
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +17,7 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  thought?: string;
   isSpeaking?: boolean;
 }
 
@@ -46,7 +48,7 @@ export default function ChatWorkbench() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+  const API_URL = getApiBaseUrl();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -186,6 +188,7 @@ export default function ChatWorkbench() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
+      let fullThought = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -195,19 +198,22 @@ export default function ChatWorkbench() {
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             const dataStr = line.slice(6).trim();
-            if (dataStr !== "[DONE]") {
-              try {
-                const data = JSON.parse(dataStr);
-                if (data.type === "answer") {
-                  fullContent += data.content;
-                  setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: fullContent } : m));
-                  if (data.session_id && !activeSessionId) {
-                    setActiveSessionId(data.session_id);
-                    fetchSessions();
-                  }
+            if (dataStr === "[DONE]") break;
+            
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.type === "thought") {
+                fullThought += (fullThought ? "\n" : "") + data.content;
+                setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, thought: fullThought } : m));
+              } else if (data.type === "answer") {
+                fullContent += data.content;
+                setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: fullContent } : m));
+                if (data.session_id && !activeSessionId) {
+                  setActiveSessionId(data.session_id);
+                  fetchSessions();
                 }
-              } catch (e) {}
-            }
+              }
+            } catch (e) {}
           }
         }
       }
@@ -222,7 +228,7 @@ export default function ChatWorkbench() {
   };
 
   return (
-    <div className="flex w-full h-full overflow-hidden bg-background/20 relative">
+    <div className="flex w-full h-full overflow-hidden bg-background/20 relative architecture-grid">
       
       {/* Perspective Sidebar */}
       <div className="hidden xl:flex w-[300px] border-r border-white/5 flex-col p-8 gap-10 glass-panel">
@@ -279,9 +285,9 @@ export default function ChatWorkbench() {
       </div>
 
       {/* Primary Interaction Layer */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
         <ScrollArea className="flex-1">
-          <div className="max-w-4xl mx-auto px-10 py-16 flex flex-col gap-16">
+          <div className="w-full max-w-4xl mx-auto px-4 md:px-10 py-8 md:py-16 flex flex-col gap-8 md:gap-16">
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-center py-20">
                 <motion.div 
@@ -343,15 +349,28 @@ export default function ChatWorkbench() {
                   </div>
 
                   <div className={cn(
-                    "relative px-10 py-8 rounded-[3rem] border shadow-2xl transition-all duration-500",
+                    "relative px-5 py-4 md:px-10 md:py-8 rounded-2xl md:rounded-[3rem] border shadow-2xl transition-all duration-500",
                     msg.role === "user" 
-                      ? "bg-primary/5 border-primary/10 rounded-tr-md ml-auto max-w-[85%]" 
-                      : "glass-card rounded-tl-md max-w-[95%] lg:max-w-prose"
+                      ? "bg-primary/5 border-primary/10 rounded-tr-md ml-auto max-w-[95%] md:max-w-[85%]" 
+                      : "glass-card rounded-tl-md max-w-full md:max-w-[95%] lg:max-w-prose"
                   )}>
                     <div className={cn(
                       "text-[16px] leading-[1.8] tracking-tight font-medium",
                       msg.role === "assistant" ? "text-slate-100" : "text-white"
                     )}>
+                      {msg.thought && (
+                        <div className="mb-6 p-4 rounded-2xl bg-primary/5 border border-primary/10 overflow-hidden relative group/thought">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Activity size={10} className="text-primary animate-pulse" />
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60 italic">Neural Trace: Active Reasoning</span>
+                          </div>
+                          <div className="text-[11px] leading-relaxed text-muted-foreground/80 font-mono italic whitespace-pre-wrap">
+                            {msg.thought}
+                          </div>
+                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20" />
+                        </div>
+                      )}
+                      
                       {msg.content}
                     </div>
                     
@@ -398,28 +417,28 @@ export default function ChatWorkbench() {
         </ScrollArea>
 
         {/* HUD Control Layer */}
-        <footer className="p-10 pt-0 relative z-10 shrink-0">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="relative glass-panel rounded-[2.5rem] p-4 pl-10 focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-white/5 bg-white/[0.01]">
-              <div className="flex items-end gap-6">
+        <footer className="p-4 md:p-10 md:pt-0 relative z-10 shrink-0">
+          <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
+            <div className="relative glass-panel rounded-2xl md:rounded-[2.5rem] p-2 pl-4 md:p-4 md:pl-10 focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-white/5 bg-white/[0.01]">
+              <div className="flex items-end gap-3 md:gap-6">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                   placeholder="Query local cluster matrix..."
                   rows={1}
-                  className="flex-1 bg-transparent border-none outline-none text-base py-6 max-h-[200px] resize-none overflow-y-auto scrollbar-hide text-white font-bold placeholder:opacity-20 placeholder:italic italic"
+                  className="flex-1 bg-transparent border-none outline-none text-sm md:text-base py-3 md:py-6 max-h-[150px] md:max-h-[200px] resize-none overflow-y-auto scrollbar-hide text-white font-bold placeholder:opacity-20 placeholder:italic italic"
                 />
                 <div className="flex items-center gap-3 mb-3 mr-3">
                   <Tooltip>
                     <TooltipTrigger
                       onClick={isRecording ? stopRecording : startRecording}
                       className={cn(
-                        "w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500",
+                        "w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center transition-all duration-500",
                         isRecording ? "bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse" : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white border border-white/5"
                       )}
                     >
-                      {isRecording ? <Square size={20} /> : <Mic size={20} />}
+                      {isRecording ? <Square size={16} className="md:w-5 md:h-5" /> : <Mic size={16} className="md:w-5 md:h-5" />}
                     </TooltipTrigger>
                     <TooltipContent side="top" className="bg-popover border-border px-3 py-2">
                       <p className="text-[10px] font-black uppercase tracking-widest italic">{isRecording ? "Stop Capture" : "Audio Capture"}</p>
@@ -430,11 +449,11 @@ export default function ChatWorkbench() {
                     onClick={() => sendMessage()} 
                     disabled={!input.trim() || isLoading}
                     className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-700 shadow-xl",
+                      "w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center transition-all duration-700 shadow-xl",
                       input.trim() && !isLoading ? "bg-primary text-white shadow-primary/30" : "bg-white/5 text-muted-foreground opacity-50 border border-white/5"
                     )}
                   >
-                    <Send size={20} className={cn("transition-transform duration-500", input.trim() && !isLoading && "translate-x-0.5 -translate-y-0.5 rotate-[-12deg]")} />
+                    <Send size={16} className={cn("md:w-5 md:h-5 transition-transform duration-500", input.trim() && !isLoading && "translate-x-0.5 -translate-y-0.5 rotate-[-12deg]")} />
                   </button>
                 </div>
               </div>

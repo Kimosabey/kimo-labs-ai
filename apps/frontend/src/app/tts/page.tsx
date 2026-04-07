@@ -8,6 +8,7 @@ import {
   MessageCircle, Info, ChevronDown, Zap, Cpu, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -20,7 +21,7 @@ export default function TTSPage() {
   const [selectedVoice, setSelectedVoice] = useState("en_US-lessac-medium");
   const [error, setError] = useState<string | null>(null);
   
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+  const API_URL = getApiBaseUrl();
 
   const voices = [
     { id: "en_US-lessac-medium", name: "Lessac (Medium)", lang: "EN-US", gender: "Neutral" },

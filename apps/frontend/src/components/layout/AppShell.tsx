@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -22,7 +23,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [health, setHealth] = useState<any>(null);
   const pathname = usePathname();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+  const API_URL = getApiBaseUrl();
 
   useEffect(() => {
     const fetchHealth = async () => {
