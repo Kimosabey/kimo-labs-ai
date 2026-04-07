@@ -25,19 +25,44 @@ function log_error() {
     echo -e "${COLOR_RED}[ERROR]${COLOR_NC} $1"
 }
 
+function detect_host_ip() {
+    local detected_ip
+    detected_ip=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
+    if [ -n "$detected_ip" ]; then
+        echo "$detected_ip"
+    else
+        echo "localhost"
+    fi
+}
+
+function print_access_urls() {
+    local host_ip
+    host_ip=$(detect_host_ip)
+    log_info "Frontend  : http://localhost:3001"
+    log_info "Backend   : http://localhost:8001"
+    log_info "Chroma GUI: http://localhost:8003"
+    log_info "MongoDB   : mongodb://localhost:27017 (Native)"
+    if [ "$host_ip" != "localhost" ]; then
+        log_info "Network UI: http://${host_ip}:3001"
+        log_info "Network API: http://${host_ip}:8001"
+        log_info "Network GUI: http://${host_ip}:8003"
+        log_info "Network DB : mongodb://${host_ip}:27017"
+    fi
+}
+
 case "$1" in
     dev)
         log_info "Starting Kimo Labs in LOCAL DEVELOPMENT mode (No Docker)..."
         
-        # Start ChromaDB locally if docker is available
+        # Start ChromaDB and Valkey locally if docker is available
         if docker ps >/dev/null 2>&1; then
-            log_info "Starting ChromaDB service and GUI for local dev..."
-            docker-compose up -d chroma-server chroma-admin
+            log_info "Starting ChromaDB, Valkey Cache, and Admin GUI for local dev..."
+            docker-compose up -d chroma-server chroma-admin valkey
         fi
 
         # Start Backend
         log_info "Launching FastAPI Backend..."
-        export PYTHONPATH=$PYTHONPATH:$(pwd)/apps
+        export PYTHONPATH=$PYTHONPATH:$(pwd)/apps:$(pwd)/apps/backend
         export CHROMA_HOST=localhost
         export CHROMA_PORT=8002
         source .venv/bin/activate
@@ -53,9 +78,7 @@ case "$1" in
         cd - > /dev/null
 
         log_success "Kimo Labs is running (Local)!"
-        log_info "Frontend  : http://10.10.20.144:3001"
-        log_info "Backend   : http://10.10.20.144:8001"
-        log_info "Chroma GUI: http://10.10.20.144:8003"
+        print_access_urls
         
         # Handle termination
         trap "kill $BACKEND_PID $FRONTEND_PID; exit" SIGINT SIGTERM
@@ -66,9 +89,7 @@ case "$1" in
         log_info "Starting Kimo Labs in STABLE DOCKER mode..."
         docker-compose -f docker-compose.yml up -d --build
         log_success "Kimo Labs is running in background!"
-        log_info "Frontend  : http://10.10.20.144:3001"
-        log_info "Backend   : http://10.10.20.144:8001"
-        log_info "Chroma GUI: http://10.10.20.144:8003"
+        print_access_urls
         ;;
 
     up-dev)

@@ -43,8 +43,6 @@ services:
     volumes:
       - ./apps/frontend:/app
       - /app/node_modules # Preserve node_modules inside container
-    environment:
-      - NEXT_PUBLIC_API_URL=http://10.10.20.144:8001
     command: npm run dev
     depends_on:
       - backend
