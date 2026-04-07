@@ -1,4 +1,4 @@
-# 🛰 Kimo Labs v2: System Design Plan
+# 🛰 Kimo Labs v3.0: Hybrid Monolith Design Plan
 
 This document provides a high-level overview of the architecture, data flow, and technology choices in Kimo Labs v2.
 
@@ -8,21 +8,29 @@ Kimo Labs follows a **Multimodal Intelligence Node** pattern. It serves as a uni
 
 ```mermaid
 graph TD
-    User((User)) -->|Browser| Frontend[Next.js Frontend]
-    Frontend -->|HTTP / SSE| API[FastAPI Gateway]
+    User((User)) -->|Browser| Frontend[Next.js Frontend - Native]
+    Frontend -->|HTTP / SSE| API[FastAPI Gateway - Native]
     
-    subgraph "Intelligence Cluster"
+    subgraph "Infrastructure Layer (Docker)"
+        Chroma[(ChromaDB: Vectors)]
+        Cache[(Valkey: Semantic Cache)]
+        ChromaUI[Chroma Admin UI]
+    end
+    
+    subgraph "Local Intelligence Cluster (Native)"
         API -->|Local CLI| TTS[Piper Engine]
-        API -->|Python SDK| ASR[Faster-Whisper]
         API -->|Ollama API| LLM[Llama-3 / DeepSeek]
+        API -->|Python SDK| ASR[Faster-Whisper]
+        Ollama[Ollama Engine]
     end
     
     subgraph "Persistence Layer"
         API -->|SQLAlchemy| DB[(SQLite: Sessions)]
-        API -->|HTTP| Chroma[(ChromaDB: Vectors)]
+        API -->|HTTP| Chroma
+        API -->|Redis Protocol| Cache
     end
     
-    ChromaUI[Chroma Admin UI] --- Chroma
+    ChromaUI --- Chroma
 ```
 
 ## 🛠 Technology Stack
@@ -62,14 +70,17 @@ graph TD
 4. LLM (Ollama) → SSE Data Stream → Frontend (Live UI Update).
 5. (Optional) Final Response → TTS Engine → Byte Stream Playback.
 
-## 🏗 Orchestration Strategy
+## 🏗 Orchestration Strategy: Hybrid Monolith
 
-Managed via **Docker Compose** for environment isolation:
-- `backend`: The API gateway and multimodal orchestrators.
-- `chroma-server`: The dedicated vector database server.
-- `chroma-admin`: The visual management console.
-- `frontend`: (Optional) Local dev server for maximum responsiveness.
+Managed via a combination of **Docker Compose** (for data isolation) and **Native OS** (for app performance):
+
+- `native-backend`: The FastAPI gateway running directly on Python 3.12+ for maximum M4 Neural Engine throughput.
+- `native-frontend`: Next.js 15+ console running on Node 20+, optimized for Turbopack.
+- `chroma-server` (Docker): Persistent vector database for RAG memory.
+- `chroma-admin` (Docker): Visual observability for vector collections.
+- `valkey-cache` (Docker): High-performance semantic response cache.
+- `ollama` (Native): Dedicated macOS service for GGUF model inference.
 
 ---
 
-*Kimo Labs Research Node - System Design v2.0*
+*Kimo Labs Research Node - System Design v3.0*

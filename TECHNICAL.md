@@ -51,13 +51,30 @@ kimo-labs/
 
 ## 🌐 System Topology & Ports
 
-| Service | Protocol | Port | Description |
-| :--- | :--- | :--- | :--- |
-| **Frontend** | Next.js | `3001` | [Monolith Console](http://10.10.20.144:3001) |
-| **Backend** | FastAPI | `8001` | [Intelligence API](http://10.10.20.144:8001/docs) |
-| **ChromaDB** | Vector Lake | `8002` | High-dimensional Storage |
-| **Chroma GUI** | Admin | `8003` | [Vector Diagnostics](http://10.10.20.144:8003) |
-| **Valkey** | Cache Node | `6379` | Semantic Response Cache |
+| Service | Protocol | Port | Environment | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **Frontend** | Next.js | `3001` | **Local (Native)** | [Monolith Console](http://10.10.20.144:3001) |
+| **Backend** | FastAPI | `8001` | **Local (Native)** | [Intelligence API](http://10.10.20.144:8001/docs) |
+| **Ollama** | LLM Engine | `11434` | **Local (Native)** | [Neural Inference](http://localhost:11434) |
+| **ChromaDB** | Vector Lake | `8002` | **Docker** | High-dimensional Storage |
+| **Chroma GUI** | Admin | `8003` | **Docker** | [Vector Diagnostics](http://10.10.20.144:8003) |
+| **Valkey** | Cache Node | `6379` | **Docker** | Semantic Response Cache |
+| **Voice Agent** | WebRTC | `N/A` | **Native (Agent)** | Real-time AI Node (LiveKit) |
+
+### 🏗 Hybrid Orchestration: Local + Docker
+
+Kimo Labs v3.0 operates in a **Hybrid Mode** to maximize performance on Apple M4 architecture while maintaining infrastructure isolation for databases:
+
+1.  **Native Performance (Application Layer)**: The Frontend (Next.js) and Backend (FastAPI) run directly on the host OS for zero-latency memory access and native debugger support.
+2.  **Containerized persistence (Data Layer)**: ChromaDB and Valkey run in Docker to ensure consistent environment variables, volume persistence, and easy cleanup.
+
+### 🚀 Unified Ignition Sequence
+
+To start the full stack in Hybrid mode:
+```bash
+./kimo.sh dev
+```
+*This command will check for Docker, start the database containers, and then launch the Python and Node processes natively.*
 
 ### 🚀 Comprehensive Ignition Commands
 
@@ -94,4 +111,44 @@ npm run dev
 
 ---
 
-*Kimo Labs Research Node - Monolith Standard v3.0*
+### 🛠 Individual Service Control (Manual Mode)
+
+If you prefer to start services independently for debugging or focused development:
+
+#### 1. Data Layer (Docker)
+Start the vector store, cache, and admin GUI:
+```bash
+docker-compose up -d chroma-server chroma-admin valkey
+```
+
+#### 2. Intelligence Backend (Native)
+Ensure the virtual environment is active and the path is set before launching:
+```bash
+source .venv/bin/activate
+export PYTHONPATH=$PYTHONPATH:$(pwd)/apps:$(pwd)/apps/backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --app-dir apps/backend
+```
+
+#### 3. Monolith Console (Native)
+Navigate to the frontend directory and start the dev server:
+```bash
+cd apps/frontend
+npm run dev
+```
+
+#### 4. LLM Engine (Deepgram/Ollama)
+Ensure the Ollama application is running on your Mac. You can verify it by checking:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+#### 5. Real-time Voice Agent (LiveKit)
+Start the background worker for real-time voice interaction:
+```bash
+source .venv/bin/activate
+export PYTHONPATH=$PYTHONPATH:$(pwd)/apps:$(pwd)/apps/backend
+python apps/backend/app/core/voice_agent.py dev
+```
+
+---
+

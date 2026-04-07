@@ -45,9 +45,9 @@ The easiest way to manage Kimo Labs is via the unified `kimo.sh` script.
 
 For granular control, you can start each service individually in separate terminals:
 
-1.  **Start Vector Database (Docker)**
+1.  **Start Persistence & Cache (Docker)**
     ```bash
-    docker-compose up -d chroma-server chroma-admin
+    docker-compose up -d chroma-server chroma-admin valkey
     ```
 
 2.  **Start Backend (FastAPI)**

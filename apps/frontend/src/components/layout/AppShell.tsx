@@ -13,7 +13,8 @@ import { getApiBaseUrl } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { INTELLIGENCE_NODES, getStatusColor } from "@/lib/registry";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -31,7 +32,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const res = await fetch(`${API_URL}/health`);
         if (res.ok) setHealth(await res.json());
       } catch (err) {
-        setHealth({ nodes: { backend: "offline", ollama: "offline", chromadb: "offline", sqlite: "offline" } });
+        setHealth({ nodes: { backend: "offline", ollama: "offline", chromadb: "offline", mongodb: "offline" } });
       }
     };
     fetchHealth();
@@ -65,12 +66,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     fetchModels();
   }, [API_URL]);
 
-  const navItems = [
-    { icon: LayoutGrid, label: "Mission Control", href: "/" },
-    { icon: MessageSquare, label: "Agentic Hub", href: "/chat" },
-    { icon: Mic, label: "Speech Lab", href: "/asr" },
-    { icon: Volume2, label: "Voice Studio", href: "/tts" },
-    { icon: Database, label: "Vector Index", href: "/vectors" },
+  const categories = [
+    { id: "core", label: "Core Intelligence" },
+    { id: "multimodal", label: "Multimodal Lab" },
+    { id: "analytics", label: "Diagnostic Matrix" },
   ];
 
   return (
@@ -117,58 +116,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Separator className="bg-white/5" />
 
             <ScrollArea className="flex-1 px-4 py-8">
-              <div className="space-y-12">
-                <div>
-                  <p className="px-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-6 italic">Strategic Operations</p>
-                  <div className="space-y-1.5 px-1">
-                    {navItems.map((item) => {
-                      const isActive = pathname === item.href;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={cn(
-                            "group relative w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-500",
-                            isActive 
-                              ? "bg-white/10 text-white border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" 
-                              : "text-muted-foreground border border-transparent hover:bg-white/5 hover:text-white"
-                          )}
-                        >
-                          <item.icon size={20} className={cn(
-                            "transition-all duration-500",
-                            isActive ? "text-white text-glow scale-110" : "group-hover:text-white"
-                          )} />
-                          <span className={cn(
-                            "text-sm font-bold tracking-tight uppercase italic",
-                            isActive ? "text-glow-white" : ""
-                          )}>{item.label}</span>
-                          {isActive && (
-                            <motion.div 
-                              layoutId="nav-pill"
-                              className="absolute left-0 w-1 h-6 bg-white rounded-full shadow-[0_0_12px_rgba(255,255,255,0.8)]"
-                            />
-                          )}
-                        </Link>
-                      );
-                    })}
+              <div className="space-y-10">
+                {categories.map((cat) => (
+                  <div key={cat.id}>
+                    <p className="px-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-4 italic opacity-40">
+                      {cat.label}
+                    </p>
+                    <div className="space-y-1 px-1">
+                      {INTELLIGENCE_NODES.filter(node => node.category === cat.id).map((node) => {
+                        const isActive = pathname === node.href;
+                        return (
+                          <Link
+                            key={node.href}
+                            href={node.href}
+                            className={cn(
+                              "group relative w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300",
+                              isActive 
+                                ? "bg-white/10 text-white border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" 
+                                : "text-muted-foreground border border-transparent hover:bg-white/5 hover:text-white"
+                            )}
+                          >
+                            <node.icon size={18} className={cn(
+                              "transition-all duration-300",
+                              isActive ? "text-white text-glow scale-110" : "group-hover:text-white"
+                            )} />
+                            <div className="flex flex-col">
+                              <span className={cn(
+                                "text-[11px] font-black tracking-tight uppercase italic",
+                                isActive ? "text-glow-white" : ""
+                              )}>{node.title}</span>
+                              {node.badge && isActive && (
+                                <span className="text-[8px] font-bold opacity-40 uppercase tracking-widest">{node.badge}</span>
+                              )}
+                            </div>
+                            {isActive && (
+                              <motion.div 
+                                layoutId="nav-pill"
+                                className="absolute left-0 w-1 h-5 bg-white rounded-full shadow-[0_0_12px_rgba(255,255,255,0.8)]"
+                              />
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                  <p className="px-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-6 italic">System Diagnostics</p>
-                  <div className="space-y-1.5 px-1">
-                    {[
-                      { icon: History, label: "Neural Threads" },
-                      { icon: Terminal, label: "Core Logs" },
-                      { icon: Settings, label: "Node Config" },
-                    ].map((item) => (
-                      <button key={item.label} className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent transition-all group">
-                        <item.icon size={20} className="group-hover:text-white transition-colors" />
-                        <span className="text-sm font-bold tracking-tight uppercase italic">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             </ScrollArea>
 
@@ -188,7 +180,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       { key: "backend", label: "Api", icon: ShieldCheck },
                       { key: "ollama", label: "Core", icon: Cpu },
                       { key: "chromadb", label: "Lake", icon: Database },
-                      { key: "sqlite", label: "Mem", icon: Zap },
+                      { key: "mongodb", label: "Mem", icon: Zap },
                     ].map((node) => {
                       const isOnline = health?.nodes?.[node.key] === "online";
                       return (
@@ -250,7 +242,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-pulse" />
                 <h1 className="text-2xl font-black tracking-[-0.02em] text-white uppercase italic text-glow-white">
-                  {navItems.find(i => i.href === pathname)?.label || "Mission Control"}
+                  {INTELLIGENCE_NODES.find(i => i.href === pathname)?.title || "Mission Control"}
                 </h1>
               </div>
             </div>

@@ -9,17 +9,20 @@ import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { MissionControlHUD } from "@/components/MissionControlHUD";
 
+import { INTELLIGENCE_NODES, getStatusColor } from "@/lib/registry";
+
 interface ToolCardProps {
   title: string;
   description: string;
   icon: any;
   href: string;
   badge?: string;
-  statusColor: string;
-  delay: number;
+  status: any;
+  delay?: number;
 }
 
-function ToolCard({ title, description, icon: Icon, href, badge, statusColor, delay }: ToolCardProps) {
+function ToolCard({ title, description, icon: Icon, href, badge, status, delay = 0 }: ToolCardProps) {
+  const statusStyles = getStatusColor(status);
   return (
     <div className="tool-card-reveal">
       <Link href={href} className="block group h-full">
@@ -36,7 +39,7 @@ function ToolCard({ title, description, icon: Icon, href, badge, statusColor, de
             {badge && (
               <div className={cn(
                 "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.3em] border bg-background/50 backdrop-blur-md italic shadow-sm",
-                statusColor
+                statusStyles
               )}>
                 {badge}
               </div>
@@ -79,62 +82,16 @@ export default function Home() {
       gsap.from(".tool-card-reveal", {
         y: 60,
         opacity: 0,
-        stagger: 0.15,
+        stagger: 0.1,
         duration: 1.2,
         ease: "expo.out",
-        delay: 0.5
+        delay: 0.3
       });
     }, containerRef);
     return () => ctx.revert();
   }, []);
 
-  const tools = [
-    {
-      title: "Voice Agent Lab",
-      description: "Real-time neural link with Kimo using LiveKit and Deepgram for low-latency multimodal research.",
-      icon: Radio,
-      href: "/voice",
-      badge: "Operational",
-      statusColor: "text-white border-white/20 bg-white/5",
-      delay: 0.1
-    },
-    {
-      title: "Agentic Hub",
-      description: "Advanced RAG-powered chat interface with sub-surface memory and local tool-use orchestrator.",
-      icon: MessageSquare,
-      href: "/chat",
-      badge: "Operational",
-      statusColor: "text-emerald-400/80 border-emerald-500/20 bg-emerald-500/5",
-      delay: 0.2
-    },
-    {
-      title: "Speech Lab",
-      description: "High-precision ASR orchestration. Choose between local Whisper and cloud Deepgram engines.",
-      icon: Mic,
-      href: "/asr",
-      badge: "Scale 1:1",
-      statusColor: "text-white border-white/20",
-      delay: 0.2
-    },
-    {
-      title: "Voice Studio",
-      description: "Neural voice synthesis studio using Piper for high-fidelity local text-to-speech generation.",
-      icon: Volume2,
-      href: "/tts",
-      badge: "Ready",
-      statusColor: "text-white opacity-40 border-white/5 bg-white/5",
-      delay: 0.3
-    },
-    {
-      title: "Vector Index",
-      description: "Diagnostic explorer for the ChromaDB intelligence lake. Monitor collections and metadata health.",
-      icon: Database,
-      href: "/vectors",
-      badge: "Online",
-      statusColor: "text-white border-white/20",
-      delay: 0.4
-    }
-  ];
+  const tools = INTELLIGENCE_NODES.filter(node => node.id !== "hub");
 
   return (
     <div className="h-full overflow-y-auto scrollbar-hide" ref={containerRef}>
@@ -214,7 +171,7 @@ export default function Home() {
         {/* Tools Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {tools.map((tool) => (
-            <ToolCard key={tool.title} {...tool} />
+            <ToolCard key={tool.id} {...tool} />
           ))}
         </div>
 
